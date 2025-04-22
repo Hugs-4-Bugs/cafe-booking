@@ -1,15 +1,11 @@
 import api from './api';
 
-export interface IBill {
+export interface IBillProduct {
   id: number;
-  uuid: string;
   name: string;
-  email: string;
-  contactNumber: string;
-  paymentMethod: string;
-  total: number;
-  productDetails: string; // This is a JSON string
-  createdBy: string;
+  category: string;
+  quantity: number;
+  price: number;
 }
 
 export interface IBillRequest {
@@ -17,28 +13,48 @@ export interface IBillRequest {
   email: string;
   contactNumber: string;
   paymentMethod: string;
-  totalAmount: number;
-  productDetails: string | any[]; // Can be a JSON string or array of objects
+  productDetails: string;
+  total: number;
+}
+
+export interface IBill {
+  id: number;
+  uuid: string;
+  name: string;
+  email: string;
+  contactNumber: string;
+  paymentMethod: string;
+  productDetails: string;
+  total: number;
+  createdBy: string;
+  createdAt: string;
 }
 
 const billService = {
   generateReport: (data: IBillRequest) => {
-    return api.post<string>('/bill/generateReport', data);
+    return api.post<{ uuid: string }>('/bill/generateReport', data);
   },
 
-  getBills: () => {
+  getAllBills: () => {
     return api.get<IBill[]>('/bill/getBills');
   },
 
-  getPdf: (billId: number) => {
-    return api.get<Blob>('/bill/getPdf', {
-      params: { uuid: billId },
-      responseType: 'blob'
-    });
+  downloadBill: (id: number) => {
+    return api.post('/bill/getPdf', { id }, { responseType: 'blob' })
+      .then((response) => {
+        // Create a blob URL and trigger download
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `bill-${id}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      });
   },
 
-  deleteBill: (billId: number) => {
-    return api.post<string>(`/bill/delete/${billId}`);
+  deleteBill: (id: number) => {
+    return api.post<string>('/bill/delete', { id });
   }
 };
 

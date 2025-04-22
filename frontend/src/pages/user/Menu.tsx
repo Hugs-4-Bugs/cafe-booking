@@ -76,7 +76,7 @@ const Menu = () => {
       result = result.filter(
         product =>
           product.name.toLowerCase().includes(term) ||
-          product.description.toLowerCase().includes(term)
+          (product.description ?? '').toLowerCase().includes(term)
       );
     }
 
@@ -249,64 +249,61 @@ const Menu = () => {
                 }}
                 className="mt-4 px-4 py-2 bg-primary-100 text-primary-700 rounded-md hover:bg-primary-200"
               >
-                Clear filters
+                Clear Filters
               </button>
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredProducts.map(product => {
-              const quantity = getCartQuantity(product.id);
-
-              return (
-                <div
-                  key={product.id}
-                  className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300"
-                >
-                  <div className="p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h3 className="text-xl font-semibold text-gray-900 mb-1">{product.name}</h3>
-                        <p className="text-sm text-gray-500">{product.categoryName}</p>
-                      </div>
-                      <div className="bg-primary-50 px-3 py-1 rounded-full text-primary-700 font-semibold">
-                        ₹{product.price}
-                      </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredProducts.map(product => (
+              <div key={product.id} className="bg-white rounded-lg shadow-md overflow-hidden">
+                <div className="p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">{product.name}</h3>
+                      <p className="text-sm text-gray-500">{product.categoryName}</p>
                     </div>
+                    <div className="bg-primary-50 px-3 py-1 rounded-full text-primary-700 font-semibold">
+                      ₹{product.price}
+                    </div>
+                  </div>
 
-                    <p className="text-gray-600 mb-6 line-clamp-2">{product.description}</p>
+                  <p className="text-gray-600 mb-6 line-clamp-2">
+                    {product.description || 'No description available'}
+                  </p>
 
-                    {quantity > 0 ? (
-                      <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between">
+                    {getCartQuantity(product.id) > 0 ? (
+                      <div className="flex items-center">
                         <button
                           onClick={() => removeFromCart(product.id)}
-                          className="bg-primary-100 rounded-full p-1 text-primary-700 hover:bg-primary-200"
+                          className="flex items-center justify-center w-8 h-8 bg-primary-100 rounded-full text-primary-600 hover:bg-primary-200"
                         >
-                          <MinusIcon className="h-6 w-6" />
+                          <MinusIcon className="h-5 w-5" />
                         </button>
-
-                        <span className="font-semibold text-lg">{quantity}</span>
-
+                        <span className="mx-3 font-medium">
+                          {getCartQuantity(product.id)}
+                        </span>
                         <button
                           onClick={() => addToCart(product)}
-                          className="bg-primary-600 rounded-full p-1 text-white hover:bg-primary-700"
+                          className="flex items-center justify-center w-8 h-8 bg-primary-100 rounded-full text-primary-600 hover:bg-primary-200"
                         >
-                          <PlusIcon className="h-6 w-6" />
+                          <PlusIcon className="h-5 w-5" />
                         </button>
                       </div>
                     ) : (
                       <button
                         onClick={() => addToCart(product)}
-                        className="w-full bg-primary-600 text-white py-2 rounded-md hover:bg-primary-700 transition-colors flex items-center justify-center"
+                        className="flex items-center justify-center px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
                       >
-                        <PlusIcon className="h-5 w-5 mr-1" />
                         Add to Cart
+                        <PlusIcon className="h-5 w-5 ml-1" />
                       </button>
                     )}
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         )}
       </div>

@@ -1,259 +1,130 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 import { billService } from '../../services';
-import { IBill } from '../../services/billService';
-import {
-  DocumentTextIcon,
-  EyeIcon,
-  ArrowDownTrayIcon,
-  TrashIcon
-} from '@heroicons/react/24/outline';
+import { DownloadIcon, EyeIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { Link } from 'react-router-dom';
+
+interface IBill {
+  id: number;
+  uuid: string;
+  name: string;
+  email: string;
+  contactNumber: string;
+  paymentMethod: string;
+  productDetails: string;
+  total: number;
+  createdBy: string;
+  createdAt: string;
+}
 
 const OrderHistory = () => {
-  const [bills, setBills] = useState<IBill[]>([]);
+  const { user, isAuthenticated } = useAuth();
+  const [orders, setOrders] = useState<IBill[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedBill, setSelectedBill] = useState<IBill | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<IBill | null>(null);
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
-    fetchBills();
-  }, []);
-
-  const fetchBills = async () => {
-    try {
+    const fetchOrders = async () => {
       setLoading(true);
-      const response = await billService.getBills();
-      setBills(response.data);
-      setError('');
-    } catch (err) {
-      console.error('Error fetching bills:', err);
-      setError('Failed to load your order history. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+      try {
+        if (isAuthenticated && user) {
+          const response = await billService.getAllBills();
+
+          // Filter bills for the current user if needed
+          // This depends on your backend implementation
+          // You might filter by email if that's how your backend tracks users
+          const userOrders = response.data;
+          setOrders(userOrders);
+        } else {
+          setOrders([]);
+        }
+      } catch (err) {
+        console.error('Failed to fetch orders:', err);
+        setError('Failed to load your order history. Please try again later.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrders();
+  }, [isAuthenticated, user]);
+
+  const handleViewOrder = (order: IBill) => {
+    setSelectedOrder(order);
+    setShowModal(true);
   };
 
-  const downloadBill = async (bill: IBill) => {
+  const handleDownload = async (billId: number) => {
     try {
-      // For this demo, we'll just show an alert
-      alert(`Downloading bill ${bill.uuid}...`);
-
-      // In a real app, you would implement something like:
-      // const response = await billService.getPdf(bill.id);
-      // const url = window.URL.createObjectURL(new Blob([response.data]));
-      // const link = document.createElement('a');
-      // link.href = url;
-      // link.setAttribute('download', `Bill-${bill.uuid}.pdf`);
-      // document.body.appendChild(link);
-      // link.click();
+      await billService.downloadBill(billId);
     } catch (err) {
       console.error('Error downloading bill:', err);
-      alert('Failed to download bill PDF.');
     }
   };
 
-  const deleteBill = async (billId: number) => {
-    if (!confirm('Are you sure you want to delete this bill?')) {
-      return;
-    }
-
-    try {
-      await billService.deleteBill(billId);
-      setBills(prevBills => prevBills.filter(bill => bill.id !== billId));
-
-      if (selectedBill && selectedBill.id === billId) {
-        setSelectedBill(null);
-        setIsModalOpen(false);
-      }
-    } catch (err) {
-      console.error('Error deleting bill:', err);
-      alert('Failed to delete bill. Please try again.');
-    }
-  };
-
-  const viewBillDetails = (bill: IBill) => {
-    setSelectedBill(bill);
-    setIsModalOpen(true);
-  };
-
-  // Parse product details from JSON string
-  const getProductDetails = (productDetailsJson: string) => {
-    try {
-      return JSON.parse(productDetailsJson);
-    } catch (err) {
-      console.error('Error parsing product details:', err);
-      return [];
-    }
-  };
-
-  // Format date string
   const formatDate = (dateString: string) => {
-    if (!dateString) return 'N/A';
-
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleString();
-    } catch (err) {
-      return dateString;
-    }
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('en-IN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
   };
 
-  // Bill details modal
-  const BillDetailsModal = () => {
-    if (!selectedBill) return null;
-
-    const productDetails = getProductDetails(selectedBill.productDetails);
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-auto">
-          <div className="p-6">
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Order Details</h2>
-                <p className="text-gray-600">Order ID: {selectedBill.uuid}</p>
-              </div>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-gray-400 hover:text-gray-500"
-              >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Customer Information</h3>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-gray-500">Name</p>
-                      <p className="text-gray-900">{selectedBill.name}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Email</p>
-                      <p className="text-gray-900">{selectedBill.email}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Contact Number</p>
-                      <p className="text-gray-900">{selectedBill.contactNumber}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Payment Method</p>
-                      <p className="text-gray-900">{selectedBill.paymentMethod}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Order Items</h3>
-                <div className="border rounded-lg overflow-hidden">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Item
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Price
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Quantity
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Total
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {productDetails.map((item: any, index: number) => (
-                        <tr key={index}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {item.name}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            ₹{item.price}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {item.quantity}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
-                            ₹{(item.price * item.quantity).toFixed(2)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-gray-50">
-                      <tr>
-                        <td colSpan={3} className="px-6 py-4 text-sm font-medium text-gray-900 text-right">
-                          Total
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 text-right">
-                          ₹{selectedBill.total}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-4">
-                <button
-                  onClick={() => downloadBill(selectedBill)}
-                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                >
-                  <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
-                  Download PDF
-                </button>
-                <button
-                  onClick={() => deleteBill(selectedBill.id)}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-red-600 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                >
-                  <TrashIcon className="h-5 w-5 mr-2" />
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+  const closeModal = () => {
+    setShowModal(false);
+    setSelectedOrder(null);
   };
 
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Order History</h1>
-        <p className="text-gray-600">View your past orders and download bills</p>
+        <p className="text-gray-600">View your past orders and receipts</p>
       </div>
 
-      {loading ? (
+      {!isAuthenticated ? (
+        <div className="bg-white rounded-lg shadow-md p-6 text-center">
+          <p className="text-gray-700 mb-4">Please log in to view your order history.</p>
+          <Link
+            to="/login"
+            className="inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          >
+            Log In
+          </Link>
+        </div>
+      ) : loading ? (
         <div className="flex justify-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
         </div>
       ) : error ? (
-        <div className="bg-white rounded-lg shadow-md p-8 text-center">
-          <DocumentTextIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-xl font-medium text-gray-900 mb-2">Error Loading Orders</h2>
-          <p className="text-gray-600 mb-4">{error}</p>
+        <div className="bg-white rounded-lg shadow-md p-6 text-center">
+          <p className="text-red-600 mb-4">{error}</p>
           <button
-            onClick={fetchBills}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            onClick={() => window.location.reload()}
+            className="inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
           >
             Try Again
           </button>
         </div>
-      ) : bills.length === 0 ? (
+      ) : orders.length === 0 ? (
         <div className="bg-white rounded-lg shadow-md p-8 text-center">
-          <DocumentTextIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-xl font-medium text-gray-900 mb-2">No Orders Yet</h2>
-          <p className="text-gray-600 mb-4">You haven't placed any orders yet.</p>
+          <h2 className="text-xl font-medium text-gray-900 mb-2">No Orders Found</h2>
+          <p className="text-gray-600 mb-6">You haven't placed any orders yet.</p>
+          <Link
+            to="/menu"
+            className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+          >
+            <ArrowLeftIcon className="h-5 w-5 mr-2" />
+            Browse Menu
+          </Link>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="bg-white shadow overflow-hidden rounded-lg">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -262,16 +133,13 @@ const OrderHistory = () => {
                     Order ID
                   </th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Customer
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Date
                   </th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount
+                    Payment Method
                   </th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Payment Method
+                    Total Amount
                   </th>
                   <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
@@ -279,45 +147,35 @@ const OrderHistory = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {bills.map((bill) => (
-                  <tr key={bill.id} className="hover:bg-gray-50">
+                {orders.map((order) => (
+                  <tr key={order.id}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {bill.uuid}
+                      #{order.uuid}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {bill.name}
+                      {formatDate(order.createdAt)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(bill.createdBy)}
+                      {order.paymentMethod}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      ₹{bill.total}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {bill.paymentMethod}
+                      ₹{Number(order.total).toFixed(2)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end space-x-2">
                         <button
-                          onClick={() => viewBillDetails(bill)}
+                          onClick={() => handleViewOrder(order)}
                           className="text-primary-600 hover:text-primary-900"
-                          title="View Details"
+                          title="View Order Details"
                         >
                           <EyeIcon className="h-5 w-5" />
                         </button>
                         <button
-                          onClick={() => downloadBill(bill)}
-                          className="text-primary-600 hover:text-primary-900"
-                          title="Download PDF"
+                          onClick={() => handleDownload(order.id)}
+                          className="text-green-600 hover:text-green-900"
+                          title="Download Receipt"
                         >
-                          <ArrowDownTrayIcon className="h-5 w-5" />
-                        </button>
-                        <button
-                          onClick={() => deleteBill(bill.id)}
-                          className="text-red-600 hover:text-red-900"
-                          title="Delete Bill"
-                        >
-                          <TrashIcon className="h-5 w-5" />
+                          <DownloadIcon className="h-5 w-5" />
                         </button>
                       </div>
                     </td>
@@ -329,7 +187,79 @@ const OrderHistory = () => {
         </div>
       )}
 
-      {isModalOpen && <BillDetailsModal />}
+      {/* Order Details Modal */}
+      {showModal && selectedOrder && (
+        <div className="fixed z-10 inset-0 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={closeModal}>
+              <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+
+            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+            <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+              <div>
+                <div className="mt-3 text-center sm:mt-0 sm:text-left">
+                  <h3 className="text-lg leading-6 font-medium text-gray-900">
+                    Order Details - #{selectedOrder.uuid}
+                  </h3>
+
+                  <div className="mt-4">
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Date</p>
+                        <p className="mt-1 text-sm text-gray-900">{formatDate(selectedOrder.createdAt)}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Payment Method</p>
+                        <p className="mt-1 text-sm text-gray-900">{selectedOrder.paymentMethod}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Customer</p>
+                        <p className="mt-1 text-sm text-gray-900">{selectedOrder.name}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Contact</p>
+                        <p className="mt-1 text-sm text-gray-900">{selectedOrder.contactNumber}</p>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-gray-200 py-4">
+                      <h4 className="text-sm font-medium text-gray-900">Items</h4>
+                      <div className="mt-2">
+                        <pre className="text-xs text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded">
+                          {selectedOrder.productDetails}
+                        </pre>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-gray-200 pt-4 flex justify-between">
+                      <span className="text-sm font-medium text-gray-900">Total Amount:</span>
+                      <span className="text-lg font-bold text-primary-600">₹{Number(selectedOrder.total).toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+                <button
+                  type="button"
+                  onClick={() => handleDownload(selectedOrder.id)}
+                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:ml-3 sm:w-auto sm:text-sm"
+                >
+                  Download Receipt
+                </button>
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:w-auto sm:text-sm"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

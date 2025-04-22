@@ -251,7 +251,7 @@ const WalletPaymentForm = ({ onSubmit, isProcessing }: {
           type="tel"
           id="phoneNumber"
           name="phoneNumber"
-          placeholder="10-digit number"
+          placeholder="Enter your phone number"
           value={walletData.phoneNumber}
           onChange={handleChange}
           required
@@ -276,245 +276,253 @@ const WalletPaymentForm = ({ onSubmit, isProcessing }: {
 const Payment = () => {
   const [orderData, setOrderData] = useState<OrderData | null>(null);
   const [paymentMethod, setPaymentMethod] = useState('');
-  const [processing, setProcessing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState('');
-
   const navigate = useNavigate();
 
   useEffect(() => {
     // Get order data from localStorage
-    const savedOrder = localStorage.getItem('cafeCurrentOrder');
-    if (!savedOrder) {
-      // No order data found, redirect to cart
+    const savedOrderData = localStorage.getItem('cafeCurrentOrder');
+
+    if (!savedOrderData) {
       navigate('/cart');
       return;
     }
 
     try {
-      const parsedOrder = JSON.parse(savedOrder);
-      setOrderData(parsedOrder);
-      setPaymentMethod(parsedOrder.customerInfo?.paymentMethod || 'Cash');
+      const parsedData = JSON.parse(savedOrderData);
+      setOrderData(parsedData);
+      setPaymentMethod(parsedData.customerInfo?.paymentMethod || 'Cash');
     } catch (err) {
       console.error('Error parsing order data:', err);
+      setError('There was an error processing your order. Please try again.');
       navigate('/cart');
     }
   }, [navigate]);
 
-  const handlePaymentMethodChange = (method: string) => {
-    setPaymentMethod(method);
-  };
-
-  const handlePaymentSubmit = async (paymentData: any) => {
+  const handlePaymentSubmit = async (paymentDetails: any) => {
     if (!orderData) return;
 
-    setProcessing(true);
+    setIsProcessing(true);
     setError('');
 
     try {
-      // Build the order payload
+      // Prepare data for backend
+      const { customerInfo, cart, subtotal, tax, total } = orderData;
+
+      // Generate the productDetails string for the bill
+      const productDetails = cart.map(item =>
+        `${item.name} x ${item.quantity} - ₹${(item.price * item.quantity).toFixed(2)}`
+      ).join('\n');
+
+      // Call the API to generate bill
       const billData = {
-        name: orderData.customerInfo.name,
-        email: orderData.customerInfo.email,
-        contactNumber: orderData.customerInfo.contactNumber,
+        name: customerInfo.name,
+        email: customerInfo.email,
+        contactNumber: customerInfo.contactNumber,
         paymentMethod: paymentMethod,
-        totalAmount: orderData.total,
-        productDetails: JSON.stringify(
-          orderData.cart.map(item => ({
-            id: item.id,
-            name: item.name,
-            price: item.price,
-            quantity: item.quantity,
-            total: item.price * item.quantity
-          }))
-        )
+        productDetails,
+        subtotal,
+        tax,
+        total
       };
 
-      // Make API call to generate bill
       const response = await billService.generateReport(billData);
 
       // Process payment based on method
       if (paymentMethod !== 'Cash') {
-        // Add payment type details
-        const paymentDetails = {
-          ...paymentData,
-          amount: orderData.total
+        const paymentPayload = {
+          ...paymentDetails,
+          amount: total
         };
-
-        // Make payment API call
         if (paymentMethod === 'Card') {
           await paymentService.processPayment({
-            ...paymentDetails,
+            ...paymentPayload,
             paymentType: 'CARD'
           });
         } else if (paymentMethod === 'UPI') {
-          await paymentService.processUpiPayment(paymentDetails);
+          await paymentService.processUpiPayment(paymentPayload);
         } else if (paymentMethod === 'Wallet') {
-          await paymentService.processWalletPayment(paymentDetails);
+          await paymentService.processWalletPayment(paymentPayload);
         }
       }
 
-      // Clear cart and order data from localStorage
+      // Clear the cart
       localStorage.removeItem('cafeCart');
+      localStorage.setItem('cafeLastOrderId', response.data?.uuid || response.data || 'ORDER123');
 
-      // Store bill ID for confirmation page
-      localStorage.setItem('cafeLastOrderId', response.data || 'ORDER123');
+      // Navigate to confirmation page with the bill UUID
+      navigate('/order-confirmation', {
+        state: {
+          billId: response.data?.uuid || response.data || 'ORDER123',
+          orderData
+        }
+      });
 
-      // Navigate to confirmation page
-      navigate('/order-confirmation');
+      setIsProcessing(false);
     } catch (err) {
       console.error('Payment error:', err);
-      setError('Payment processing failed. Please try again.');
-    } finally {
-      setProcessing(false);
+      setError('There was an error processing your payment. Please try again.');
+      setIsProcessing(false);
     }
   };
 
   if (!orderData) {
     return (
-      <div className="min-h-96 flex justify-center items-center">
+      <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
       </div>
     );
   }
 
+  const renderPaymentForm = () => {
+    switch (paymentMethod) {
+      case 'Card':
+        return <CardPaymentForm onSubmit={handlePaymentSubmit} isProcessing={isProcessing} />;
+      case 'UPI':
+        return <UpiPaymentForm onSubmit={handlePaymentSubmit} isProcessing={isProcessing} totalAmount={orderData.total} />;
+      case 'Wallet':
+        return <WalletPaymentForm onSubmit={handlePaymentSubmit} isProcessing={isProcessing} />;
+      case 'Cash':
+      default:
+        return (
+          <div className="text-center">
+            <div className="flex justify-center mb-4">
+              <BanknotesIcon className="h-16 w-16 text-primary-600" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Cash Payment</h3>
+            <p className="text-gray-600 mb-6">Pay at the counter when you collect your order.</p>
+            <button
+              onClick={() => handlePaymentSubmit({ paymentMethod: 'Cash' })}
+              disabled={isProcessing}
+              className={`w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 ${
+                isProcessing ? 'opacity-70 cursor-not-allowed' : 'hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500'
+              }`}
+            >
+              {isProcessing ? 'Processing...' : 'Place Order'}
+            </button>
+          </div>
+        );
+    }
+  };
+
   return (
-    <div className="max-w-4xl mx-auto">
+    <div>
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Payment</h1>
-        <p className="text-gray-600">Complete your payment to place the order</p>
+        <p className="text-gray-600">Complete your order by making a payment</p>
       </div>
 
-      {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md text-red-700">
-          {error}
-        </div>
-      )}
-
-      <div className="flex flex-col lg:flex-row gap-8">
-        {/* Payment method selection */}
-        <div className="lg:w-2/3">
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      <div className="flex flex-col md:flex-row gap-8">
+        {/* Payment Methods */}
+        <div className="md:w-2/3">
+          <div className="bg-white rounded-lg shadow-md overflow-hidden mb-6">
             <div className="p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Select Payment Method</h2>
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Payment Method</h2>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
                 <button
-                  onClick={() => handlePaymentMethodChange('Cash')}
-                  className={`p-4 rounded-lg border ${
+                  onClick={() => setPaymentMethod('Cash')}
+                  className={`p-3 rounded-lg border ${
                     paymentMethod === 'Cash'
-                      ? 'border-primary-600 bg-primary-50'
-                      : 'border-gray-200 bg-white'
-                  } flex flex-col items-center justify-center text-center transition-colors`}
+                      ? 'border-primary-600 bg-primary-50 text-primary-800'
+                      : 'border-gray-300 hover:border-primary-400'
+                  } flex flex-col items-center justify-center`}
                 >
-                  <BanknotesIcon className="h-8 w-8 text-gray-700 mb-2" />
+                  <BanknotesIcon className="h-8 w-8 mb-2" />
                   <span className="text-sm font-medium">Cash</span>
                 </button>
 
                 <button
-                  onClick={() => handlePaymentMethodChange('Card')}
-                  className={`p-4 rounded-lg border ${
+                  onClick={() => setPaymentMethod('Card')}
+                  className={`p-3 rounded-lg border ${
                     paymentMethod === 'Card'
-                      ? 'border-primary-600 bg-primary-50'
-                      : 'border-gray-200 bg-white'
-                  } flex flex-col items-center justify-center text-center transition-colors`}
+                      ? 'border-primary-600 bg-primary-50 text-primary-800'
+                      : 'border-gray-300 hover:border-primary-400'
+                  } flex flex-col items-center justify-center`}
                 >
-                  <CreditCardIcon className="h-8 w-8 text-gray-700 mb-2" />
+                  <CreditCardIcon className="h-8 w-8 mb-2" />
                   <span className="text-sm font-medium">Card</span>
                 </button>
 
                 <button
-                  onClick={() => handlePaymentMethodChange('UPI')}
-                  className={`p-4 rounded-lg border ${
+                  onClick={() => setPaymentMethod('UPI')}
+                  className={`p-3 rounded-lg border ${
                     paymentMethod === 'UPI'
-                      ? 'border-primary-600 bg-primary-50'
-                      : 'border-gray-200 bg-white'
-                  } flex flex-col items-center justify-center text-center transition-colors`}
+                      ? 'border-primary-600 bg-primary-50 text-primary-800'
+                      : 'border-gray-300 hover:border-primary-400'
+                  } flex flex-col items-center justify-center`}
                 >
-                  <QrCodeIcon className="h-8 w-8 text-gray-700 mb-2" />
+                  <QrCodeIcon className="h-8 w-8 mb-2" />
                   <span className="text-sm font-medium">UPI</span>
                 </button>
 
                 <button
-                  onClick={() => handlePaymentMethodChange('Wallet')}
-                  className={`p-4 rounded-lg border ${
+                  onClick={() => setPaymentMethod('Wallet')}
+                  className={`p-3 rounded-lg border ${
                     paymentMethod === 'Wallet'
-                      ? 'border-primary-600 bg-primary-50'
-                      : 'border-gray-200 bg-white'
-                  } flex flex-col items-center justify-center text-center transition-colors`}
+                      ? 'border-primary-600 bg-primary-50 text-primary-800'
+                      : 'border-gray-300 hover:border-primary-400'
+                  } flex flex-col items-center justify-center`}
                 >
-                  <DevicePhoneMobileIcon className="h-8 w-8 text-gray-700 mb-2" />
+                  <DevicePhoneMobileIcon className="h-8 w-8 mb-2" />
                   <span className="text-sm font-medium">Wallet</span>
                 </button>
               </div>
 
-              {/* Payment method specific form */}
-              <div className="mt-6">
-                {paymentMethod === 'Cash' && (
-                  <div className="text-center py-6">
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">Pay at Counter</h3>
-                    <p className="text-gray-600 mb-6">You'll pay the amount when you pick up your order.</p>
-                    <button
-                      onClick={() => handlePaymentSubmit({})}
-                      disabled={processing}
-                      className={`px-6 py-2 bg-primary-600 text-white rounded-md ${
-                        processing ? 'opacity-70 cursor-not-allowed' : 'hover:bg-primary-700'
-                      }`}
-                    >
-                      {processing ? 'Processing...' : 'Place Order'}
-                    </button>
-                  </div>
-                )}
+              {error && (
+                <div className="mb-4 p-3 rounded-md bg-red-50 text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
 
-                {paymentMethod === 'Card' && (
-                  <CardPaymentForm onSubmit={handlePaymentSubmit} isProcessing={processing} />
-                )}
-
-                {paymentMethod === 'UPI' && (
-                  <UpiPaymentForm
-                    onSubmit={handlePaymentSubmit}
-                    isProcessing={processing}
-                    totalAmount={orderData.total}
-                  />
-                )}
-
-                {paymentMethod === 'Wallet' && (
-                  <WalletPaymentForm onSubmit={handlePaymentSubmit} isProcessing={processing} />
-                )}
-              </div>
+              {renderPaymentForm()}
             </div>
           </div>
         </div>
 
-        {/* Order summary */}
-        <div className="lg:w-1/3">
+        {/* Order Summary */}
+        <div className="md:w-1/3">
           <div className="bg-white rounded-lg shadow-md overflow-hidden sticky top-20">
             <div className="p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Order Summary</h2>
 
-              <div className="space-y-4 mb-6">
-                <div className="flex justify-between items-start">
-                  <span className="text-gray-600">Items ({orderData.cart.length})</span>
-                  <span className="text-gray-900 font-medium">₹{orderData.subtotal.toFixed(2)}</span>
+              <div className="divide-y divide-gray-200">
+                {orderData.cart.map(item => (
+                  <div key={item.id} className="py-3 flex justify-between">
+                    <div>
+                      <span className="font-medium text-gray-900">{item.name}</span>
+                      <span className="text-gray-600 ml-1">x{item.quantity}</span>
+                    </div>
+                    <span className="text-gray-900">₹{(item.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="flex justify-between mb-2">
+                  <span className="text-gray-600">Subtotal</span>
+                  <span className="text-gray-900">₹{orderData.subtotal.toFixed(2)}</span>
                 </div>
 
-                <div className="flex justify-between">
+                <div className="flex justify-between mb-2">
                   <span className="text-gray-600">Tax (5%)</span>
-                  <span className="text-gray-900 font-medium">₹{orderData.tax.toFixed(2)}</span>
+                  <span className="text-gray-900">₹{orderData.tax.toFixed(2)}</span>
                 </div>
 
-                <div className="border-t border-gray-200 pt-4 flex justify-between">
+                <div className="flex justify-between mt-4 pt-4 border-t border-gray-200">
                   <span className="text-lg font-semibold text-gray-900">Total</span>
                   <span className="text-lg font-semibold text-primary-700">₹{orderData.total.toFixed(2)}</span>
                 </div>
               </div>
 
-              <div className="border-t border-gray-200 pt-4">
+              <div className="mt-6">
                 <h3 className="text-sm font-medium text-gray-900 mb-2">Customer Information</h3>
-                <ul className="text-sm text-gray-600 space-y-1">
-                  <li><span className="font-medium">Name:</span> {orderData.customerInfo.name}</li>
-                  <li><span className="font-medium">Email:</span> {orderData.customerInfo.email}</li>
-                  <li><span className="font-medium">Phone:</span> {orderData.customerInfo.contactNumber}</li>
-                </ul>
+                <div className="text-sm text-gray-600">
+                  <p>{orderData.customerInfo.name}</p>
+                  <p>{orderData.customerInfo.email}</p>
+                  <p>{orderData.customerInfo.contactNumber}</p>
+                </div>
               </div>
             </div>
           </div>

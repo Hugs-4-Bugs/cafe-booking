@@ -112,6 +112,8 @@ const Cart = () => {
       return;
     }
 
+    setLoading(true);
+
     // Store order data in localStorage for the payment page
     const orderData = {
       customerInfo,
@@ -123,8 +125,11 @@ const Cart = () => {
 
     localStorage.setItem('cafeCurrentOrder', JSON.stringify(orderData));
 
-    // Navigate to payment page
-    navigate('/payment');
+    setTimeout(() => {
+      setLoading(false);
+      // Navigate to payment page
+      navigate('/payment');
+    }, 600); // Simulate processing delay
   };
 
   // Check if cart is empty
@@ -248,70 +253,82 @@ const Cart = () => {
                   </div>
                 </div>
 
-                <form onSubmit={handleCheckout} className="mt-6 space-y-4">
-                  <div>
-                    <label htmlFor="name" className="block text-sm font-medium text-gray-700">Full Name</label>
-                    <input
-                      type="text"
-                      id="name"
-                      name="name"
-                      value={customerInfo.name}
-                      onChange={handleCustomerInfoChange}
-                      required
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                    />
-                  </div>
+                <form onSubmit={handleCheckout} className="mt-8">
+                  <h3 className="text-base font-medium text-gray-900 mb-4">Customer Information</h3>
 
-                  <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email Address</label>
-                    <input
-                      type="email"
-                      id="email"
-                      name="email"
-                      value={customerInfo.email}
-                      onChange={handleCustomerInfoChange}
-                      required
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                    />
-                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                        Name
+                      </label>
+                      <input
+                        type="text"
+                        id="name"
+                        name="name"
+                        value={customerInfo.name}
+                        onChange={handleCustomerInfoChange}
+                        required
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                      />
+                    </div>
 
-                  <div>
-                    <label htmlFor="contactNumber" className="block text-sm font-medium text-gray-700">Contact Number</label>
-                    <input
-                      type="tel"
-                      id="contactNumber"
-                      name="contactNumber"
-                      value={customerInfo.contactNumber}
-                      onChange={handleCustomerInfoChange}
-                      required
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                    />
-                  </div>
+                    <div>
+                      <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                        Email
+                      </label>
+                      <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        value={customerInfo.email}
+                        onChange={handleCustomerInfoChange}
+                        required
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                      />
+                    </div>
 
-                  <div>
-                    <label htmlFor="paymentMethod" className="block text-sm font-medium text-gray-700">Payment Method</label>
-                    <select
-                      id="paymentMethod"
-                      name="paymentMethod"
-                      value={customerInfo.paymentMethod}
-                      onChange={handleCustomerInfoChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                    >
-                      <option value="Cash">Cash</option>
-                      <option value="Card">Card</option>
-                      <option value="UPI">UPI</option>
-                      <option value="Wallet">Wallet</option>
-                    </select>
+                    <div>
+                      <label htmlFor="contactNumber" className="block text-sm font-medium text-gray-700">
+                        Phone Number
+                      </label>
+                      <input
+                        type="tel"
+                        id="contactNumber"
+                        name="contactNumber"
+                        value={customerInfo.contactNumber}
+                        onChange={handleCustomerInfoChange}
+                        required
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="paymentMethod" className="block text-sm font-medium text-gray-700">
+                        Payment Method
+                      </label>
+                      <select
+                        id="paymentMethod"
+                        name="paymentMethod"
+                        value={customerInfo.paymentMethod}
+                        onChange={handleCustomerInfoChange}
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                      >
+                        <option value="Cash">Cash</option>
+                        <option value="Card">Credit/Debit Card</option>
+                        <option value="UPI">UPI</option>
+                        <option value="Wallet">Digital Wallet</option>
+                      </select>
+                    </div>
                   </div>
 
                   <button
                     type="submit"
-                    disabled={loading || isCartEmpty}
-                    className={`w-full bg-primary-600 text-white py-3 rounded-md font-medium ${
-                      loading || isCartEmpty ? 'opacity-70 cursor-not-allowed' : 'hover:bg-primary-700'
+                    disabled={loading}
+                    className={`mt-6 w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${
+                      loading ? 'opacity-70 cursor-not-allowed' : ''
                     }`}
                   >
-                    {loading ? 'Processing...' : 'Proceed to Checkout'}
+                    {loading ? 'Processing...' : 'Proceed to Payment'}
                   </button>
                 </form>
               </div>
